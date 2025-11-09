@@ -24,6 +24,12 @@ CALCULATED_VALUES = {
     "grid_out_energy_daily": ["Daily Fed-In Energy", "energy", "total", "Wh"],
     "pv_energy_daily": ["Daily Generated PV Energy", "energy", "total", "Wh"],
     "home_energy_daily": ["Daily Consumed Home Energy", "energy", "total", "Wh"],
+    "car_charging_energy_session": [
+        "Energy Current Charging Session",
+        "energy",
+        "total",
+        "Wh",
+    ],
     "home_energy_mix_daily": ["Energy Mix Home", None, "measurement", None],
     "battery_energy_mix_daily": ["Energy Mix Battery", None, "measurement", None],
     "car_charging_energy_mix": [

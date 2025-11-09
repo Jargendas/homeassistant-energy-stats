@@ -1,5 +1,5 @@
 {
-    "name": "jargendas/energy_stats",
+    "name": "jargendas/homeassistant-energy-stats",
     "image": "mcr.microsoft.com/devcontainers/python:3.13",
     "postCreateCommand": "scripts/setup",
     "forwardPorts": [

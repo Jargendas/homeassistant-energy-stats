@@ -51,11 +51,11 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
         self._store = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}_{entry.entry_id}")
 
         self._last_update = datetime.now(UTC)
-        self._energy_sums = {}
+        self._energy_sums = {}  # Daily cumulated energies
         self._last_reset = datetime.now(UTC)
-        self._energy_baselines = {}
-        self._pv_sums = {}
-        self._grid_sums = {}
+        self._energy_baselines = {}  # Daily baseline to calculate daily energies from total energy sensor # noqa: E501
+        self._pv_sums = {}  # Cumulated consumed PV energy for all consumers for energy mix calculation  # noqa: E501
+        self._grid_sums = {}  # Cumulated consumed grid energy for all consumers for energy mix calculation  # noqa: E501
 
         _LOGGER.info("Update interval is %s", self.update_interval)
 
@@ -275,6 +275,7 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
         *,
         use_baseline: bool = True,
     ) -> None:
+        """Update daily energy values, either by using the energy sensor or by integrating the power sensor value."""  # noqa: E501
         if energy_sensor_value is not None:
             baseline = 0
             if use_baseline:
@@ -300,6 +301,7 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
         battery_power: float | None = None,
         battery_pv_factor: float | None = None,
     ) -> None:
+        """Accumulate consumed PV and grid energies."""
         if pv_power is None:
             pv_power = 0
         if grid_power is None:

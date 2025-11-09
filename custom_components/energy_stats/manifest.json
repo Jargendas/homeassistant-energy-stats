@@ -10,7 +10,7 @@
   ],
   "documentation": "https://github.com/Jargendas/energy_stats",
   "iot_class": "calculated",
-  "issue_tracker": "https://github.com/ludeeus/integration_blueprint/issues",
+  "issue_tracker": "https://github.com/Jargendas/energy_stats/issues",
   "requirements": [],
   "single_config_entry": true,
   "version": "1.0.0"
