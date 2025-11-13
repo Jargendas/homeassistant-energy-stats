@@ -185,7 +185,7 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
             elapsed_h
         )
         self._update_energy(
-            "car_charging_energy",
+            "car_charging_energy_session",
             raw_vals["car_charging_energy"],
             raw_vals["car_charging_power"],
             elapsed_h
@@ -239,7 +239,7 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
 
         if raw_vals["car_charging_power"] is not None:
             self._add_mix_energy(
-                "car_charging_energy",
+                "car_charging_energy_session",
                 result.get("pv_power", 0.0),
                 result.get("grid_power", 0.0),
                 result.get("battery_power", 0.0),
@@ -247,7 +247,7 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
                 elapsed_h,
                 usage_factor=result.get("car_charging_power", 0.0)/(result.get("home_power", 0.0) + result.get("car_charging_power", 0.0))
             )
-            result["car_charging_energy_mix"] = _mix_ratio("car_charging_energy")
+            result["car_charging_energy_mix"] = _mix_ratio("car_charging_energy_session")
             self._calculated_keys.append("car_charging_energy_mix")
 
         # Daily reset
@@ -262,8 +262,8 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("Current time (UTC): %s", str(now))
         if now >= reset_time_utc and self._last_reset < reset_time_utc:
             _LOGGER.info("Energy Stats: Resetting daily values to 0.")
-            self._energy_sums = {"car_charging_energy": self._energy_sums.get("car_charging_energy", 0.0)}
-            self._energy_baselines = {"car_charging_energy": self._energy_baselines.get("car_charging_energy", 0.0)}
+            self._energy_sums = {"car_charging_energy_session": self._energy_sums.get("car_charging_energy_session", 0.0)}
+            self._energy_baselines = {"car_charging_energy_session": self._energy_baselines.get("car_charging_energy_session", 0.0)}
             self._pv_sums = {"battery_energy": self._pv_sums.get("battery_energy", 0.0)}
             self._grid_sums = {"battery_energy": self._grid_sums.get("battery_energy", 0.0)}
             self._last_reset = now
@@ -271,8 +271,8 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
         # Car charging reset
         if (not self._car_connected_was) and result.get("car_connected", False):
             _LOGGER.info("Energy Stats: Resetting car charging energy to 0.")
-            self._energy_sums["car_charging_energy"] = 0.0
-            self._energy_baselines["car_charging_energy"] = result.get("car_charging_energy", 0.0)
+            self._energy_sums["car_charging_energy_session"] = 0.0
+            self._energy_baselines["car_charging_energy_session"] = raw_vals.get("car_charging_energy", 0.0)
         self._car_connected_was = result.get("car_connected", False)
 
         # Finalize
