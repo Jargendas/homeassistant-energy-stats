@@ -31,7 +31,7 @@ CALCULATED_VALUES = {
         "Wh",
     ],
     "home_energy_mix_daily": ["Energy Mix Home", None, "measurement", None],
-    "battery_energy_mix_daily": ["Energy Mix Battery", None, "measurement", None],
+    "battery_energy_mix": ["Energy Mix Battery", None, "measurement", None],
     "car_charging_energy_mix": [
         "Energy Mix Car Charging (last session)",
         None,
