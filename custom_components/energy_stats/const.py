@@ -2,6 +2,7 @@
 
 DOMAIN = "energy_stats"
 CONF_DAILY_RESET = "daily_reset_time"
+CONF_INITIAL_BATTERY_ENERGY_MIX = "initial_battery_energy_mix"
 
 # Die Keys, die im ConfigFlow als auswählbare Sensoren auftauchen
 SENSOR_KEYS = {
@@ -38,4 +39,10 @@ CALCULATED_VALUES = {
         "measurement",
         None,
     ],
+    "car_charging_added_soc": [
+        "SoC Added (last charging session)",
+        None,
+        "measurement",
+        "%"
+    ]
 }

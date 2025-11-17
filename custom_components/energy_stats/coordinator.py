@@ -9,7 +9,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_DAILY_RESET, SENSOR_KEYS
+from .const import CONF_DAILY_RESET, CONF_INITIAL_BATTERY_ENERGY_MIX, SENSOR_KEYS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -45,6 +45,8 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
                 ).time()
             except ValueError:
                 _LOGGER.exception("Reset time could not be parsed!")
+        
+        self.initial_battery_energy_mix = entry.data.get(CONF_INITIAL_BATTERY_ENERGY_MIX, 0)
 
         _LOGGER.debug("Initialized daily_reset type:")
         _LOGGER.debug(str(self.daily_reset))
@@ -53,7 +55,7 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
         self._last_update = datetime.now(UTC)
         self._energy_sums = {}  # Daily cumulated energies
         self._last_reset = datetime.now(UTC)
-        self._energy_baselines = {}  # Daily baseline to calculate daily energies from total energy sensor # noqa: E501
+        self._baselines = {}  # Daily baseline to calculate daily energies from total energy sensor # noqa: E501
         self._pv_sums = {}  # Cumulated consumed PV energy for all consumers for energy mix calculation  # noqa: E501
         self._grid_sums = {}  # Cumulated consumed grid energy for all consumers for energy mix calculation  # noqa: E501
         self._car_connected_was = False  # To detect car connection event
@@ -68,14 +70,14 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
             stored = await self._store.async_load()
             if stored:
                 self._energy_sums = stored.get("energy_sums", {})
-                self._energy_baselines = stored.get("energy_baselines", {})
+                self._baselines = stored.get("baselines", {})
                 self._pv_sums = stored.get("pv_sums", {})
                 self._grid_sums = stored.get("grid_sums", {})
                 self._last_reset = datetime.fromisoformat(stored.get("last_reset"))
                 self._car_connected_was = stored.get("car_connected_was", False)
             else:
                 self._energy_sums = {}
-                self._energy_baselines = {}
+                self._baselines = {}
                 self._pv_sums = {}
                 self._grid_sums = {}
                 self._last_reset = datetime.now(UTC)
@@ -161,9 +163,13 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
 
         if raw_vals["car_soc"] is not None:
             result["car_soc"] = raw_vals["car_soc"]
-        
+
+        if raw_vals["car_soc"] is not None:
+            result["car_charging_added_soc"] = raw_vals["car_soc"] - self._baselines.get("car_charging_soc", 0.0)
+            self._calculated_keys.append("car_charging_added_soc")
+
         if raw_vals["battery_energy"] is not None:
-            self._energy_sums["battery_energy"] = raw_vals["battery_energy"]
+            result["battery_energy"] = raw_vals["battery_energy"]
 
         # Energies
         self._update_energy(
@@ -185,7 +191,7 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
             elapsed_h
         )
         self._update_energy(
-            "car_charging_energy_session",
+            "car_charging_energy",
             raw_vals["car_charging_energy"],
             raw_vals["car_charging_power"],
             elapsed_h
@@ -206,21 +212,26 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
             total = pv_sum + grid_sum
             return pv_sum / total if total > 0 else 0
 
+        battery_power = result.get("battery_power", 0.0)
         if raw_vals["battery_power"] is not None:
-            if (raw_vals["battery_power"] > 0): # Discharge
+
+            if not "battery_energy" in self._pv_sums: # Initialize sums
+                self._pv_sums = {"battery_energy": result.get("battery_energy", 0.0)*self.initial_battery_energy_mix}
+                self._grid_sums = {"battery_energy": result.get("battery_energy", 0.0)*self.initial_battery_energy_mix}
+
+            if (battery_power > 0): # Discharge
                 self._add_mix_energy(
                     "battery_energy",
-                    -result.get("battery_power", 0.0)*result.get("battery_energy_mix", 0.0),
-                    -result.get("battery_power", 0.0)*(1-result.get("battery_energy_mix", 0.0)),
-                    elapsed_h
+                    -battery_power*result.get("battery_energy_mix", 0.0),
+                    -battery_power*(1-result.get("battery_energy_mix", 0.0)),
+                    elapsed_h=elapsed_h
                 )
             else:  # Charge
                 self._add_mix_energy(
                     "battery_energy",
-                    result.get("pv_power", 0.0),
-                    result.get("grid_power", 0.0),
-                    elapsed_h,
-                    usage_factor=-result.get("battery_power", 0.0)/(result.get("pv_power", 0.0) + result.get("grid_power", 0.0))
+                    result.get("pv_power", 0.0) if (-battery_power > result.get("pv_power", 0.0)) else -battery_power,
+                    (-battery_power-result.get("pv_power", 0.0)) if (-battery_power > result.get("pv_power", 0.0)) else 0,
+                    elapsed_h=elapsed_h
                 )
             result["battery_energy_mix"] = _mix_ratio("battery_energy")
             self._calculated_keys.append("battery_energy_mix")
@@ -239,7 +250,7 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
 
         if raw_vals["car_charging_power"] is not None:
             self._add_mix_energy(
-                "car_charging_energy_session",
+                "car_charging_energy",
                 result.get("pv_power", 0.0),
                 result.get("grid_power", 0.0),
                 result.get("battery_power", 0.0),
@@ -247,7 +258,7 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
                 elapsed_h,
                 usage_factor=result.get("car_charging_power", 0.0)/(result.get("home_power", 0.0) + result.get("car_charging_power", 0.0))
             )
-            result["car_charging_energy_mix"] = _mix_ratio("car_charging_energy_session")
+            result["car_charging_energy_mix"] = _mix_ratio("car_charging_energy")
             self._calculated_keys.append("car_charging_energy_mix")
 
         # Daily reset
@@ -262,17 +273,18 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
         _LOGGER.debug("Current time (UTC): %s", str(now))
         if now >= reset_time_utc and self._last_reset < reset_time_utc:
             _LOGGER.info("Energy Stats: Resetting daily values to 0.")
-            self._energy_sums = {"car_charging_energy_session": self._energy_sums.get("car_charging_energy_session", 0.0)}
-            self._energy_baselines = {"car_charging_energy_session": self._energy_baselines.get("car_charging_energy_session", 0.0)}
-            self._pv_sums = {"battery_energy": self._pv_sums.get("battery_energy", 0.0)}
-            self._grid_sums = {"battery_energy": self._grid_sums.get("battery_energy", 0.0)}
+            self._energy_sums = {"car_charging_energy": self._energy_sums.get("car_charging_energy", 0.0)}
+            self._baselines = {"car_charging_energy": self._baselines.get("car_charging_energy", 0.0), "car_charging_soc": self._baselines.get("car_charging_soc", 0.0)}
+            self._pv_sums = {"battery_energy": result.get("battery_energy", 0.0)*result.get("battery_energy_mix", 0.0)} # Set to analytic value to prevent runaway
+            self._grid_sums = {"battery_energy": result.get("battery_energy", 0.0)*(1-result.get("battery_energy_mix", 0.0))}
             self._last_reset = now
 
         # Car charging reset
         if (not self._car_connected_was) and result.get("car_connected", False):
             _LOGGER.info("Energy Stats: Resetting car charging energy to 0.")
-            self._energy_sums["car_charging_energy_session"] = 0.0
-            self._energy_baselines["car_charging_energy_session"] = raw_vals.get("car_charging_energy", 0.0)
+            self._energy_sums["car_charging_energy"] = 0.0
+            self._baselines["car_charging_energy"] = result.get("car_charging_energy", 0.0)
+            self._baselines["car_charging_soc"] = result.get("car_soc")
         self._car_connected_was = result.get("car_connected", False)
 
         # Finalize
@@ -284,7 +296,7 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
                     "energy_sums": self._energy_sums,
                     "pv_sums": self._pv_sums,
                     "grid_sums": self._grid_sums,
-                    "energy_baselines": self._energy_baselines,
+                    "baselines": self._baselines,
                     "last_reset": self._last_reset.isoformat(),
                     "car_connected_was": self._car_connected_was,
                 }
@@ -305,9 +317,9 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
     ) -> None:
         """Update daily energy values, either by using the energy sensor or by integrating the power sensor value."""  # noqa: E501
         if energy_sensor_value is not None:
-            baseline = self._energy_baselines.get(key)
+            baseline = self._baselines.get(key)
             if baseline is None:
-                self._energy_baselines[key] = energy_sensor_value
+                self._baselines[key] = energy_sensor_value
                 baseline = energy_sensor_value
             self._calculated_keys.append(key)
             self._energy_sums[key] = max(0.0, energy_sensor_value - baseline)
@@ -336,14 +348,18 @@ class EnergyStatsCoordinator(DataUpdateCoordinator):
             return
 
         if battery_power is not None:
-            if battery_power > 0:
+            if battery_power > 0: # Discharging
                 if battery_pv_factor is not None:
                     grid_power += (1 - battery_pv_factor) * battery_power
                     pv_power += battery_pv_factor * battery_power
                 else:
                     grid_power += battery_power
-            else:
-                grid_power += battery_power
+            else: # Charging
+                if (-battery_power < pv_power):
+                    pv_power -= -battery_power
+                else:
+                    grid_power -= -battery_power - pv_power
+                    pv_power = 0
 
         pv_part = max(0.0, pv_power) * elapsed_h
         grid_part = max(0.0, grid_power) * elapsed_h
