@@ -43,6 +43,6 @@ CALCULATED_VALUES = {
         "SoC Added (last charging session)",
         None,
         "measurement",
-        "%"
-    ]
+        "%",
+    ],
 }

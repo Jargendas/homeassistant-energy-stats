@@ -7,7 +7,12 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.helpers import selector
 
-from .const import CONF_DAILY_RESET, CONF_INITIAL_BATTERY_ENERGY_MIX, DOMAIN, SENSOR_KEYS
+from .const import (
+    CONF_DAILY_RESET,
+    CONF_INITIAL_BATTERY_ENERGY_MIX,
+    DOMAIN,
+    SENSOR_KEYS,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -28,7 +33,9 @@ class EnergyStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data = {k: user_input.get(k) for k in SENSOR_KEYS}
 
             data[CONF_DAILY_RESET] = user_input.get(CONF_DAILY_RESET)  # type: ignore  # noqa: PGH003
-            data[CONF_INITIAL_BATTERY_ENERGY_MIX] = user_input.get(CONF_INITIAL_BATTERY_ENERGY_MIX, 0) / 100
+            data[CONF_INITIAL_BATTERY_ENERGY_MIX] = (  # type: ignore  # noqa: PGH003
+                user_input.get(CONF_INITIAL_BATTERY_ENERGY_MIX, 0) / 100
+            )  # type: ignore  # noqa: PGH003
 
             if self.source == config_entries.SOURCE_RECONFIGURE:
                 entry = self._get_reconfigure_entry()
@@ -88,13 +95,21 @@ class EnergyStatsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             )
 
-            if (key == 'battery_energy'):
+            if key == "battery_energy":
                 schema_dict[
                     vol.Optional(
                         CONF_INITIAL_BATTERY_ENERGY_MIX,
                         default=defaults.get(CONF_INITIAL_BATTERY_ENERGY_MIX, 0) * 100,
                     )
-                ] = selector.NumberSelector(config = selector.NumberSelectorConfig(min=0, max=100, step=1, unit_of_measurement='%', mode='slider'))
+                ] = selector.NumberSelector(
+                    config=selector.NumberSelectorConfig(
+                        min=0,
+                        max=100,
+                        step=1,
+                        unit_of_measurement="%",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                )
 
         data_schema = vol.Schema(schema_dict)
 
